@@ -344,9 +344,17 @@ def _applied_beats(event: Applied) -> list[tuple[str, dict]]:
 
 
 def _applied(record: dict, event: Applied, facts: Facts, now: float) -> Step:
-    for beat, patch in _applied_beats(event):
+    """Settle what the tool applied and tell the model so, like a card answer: without it the model
+    would try to record the same pick with setup_beat."""
+    settled = _applied_beats(event)
+    for beat, patch in settled:
         _settle(record, beat, patch)
-    return Step(record, {})
+    if not settled:
+        return Step(record, {})
+    beat = settled[-1][0]
+    # A tour reminder says to start the tour; this result is that tour starting.
+    key = "after_tour" if beat == "tour" else BEAT_BY_ID[beat].after(record["picks"])
+    return Step(record, {"beat": beat, "next": _next_field(record)}, key)
 
 
 _HANDLERS: dict[type, Callable[[dict, Any, Facts, float], Step]] = {

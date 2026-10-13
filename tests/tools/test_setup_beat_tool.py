@@ -124,3 +124,21 @@ def test_outside_an_onboarding_chat_the_tool_refuses(db, desktop):
     assert "not running" in call(db, desktop, beat="next")["error"]
     # A bare registry dispatch has no session store or card callback.
     assert "error" in json.loads(registry.dispatch("setup_beat", {"beat": "next"}))
+
+
+def test_set_theme_applying_the_layout_tells_the_model_the_beat_settled_and_what_is_next(db, desktop):
+    onboarding_record.start(db, SID, FACTS)
+    for beat, answer in [("name", {"name": "Sid"}), ("theme", {"accent": "Ultraviolet"})]:
+        desktop.replies.append({"answer": answer})
+        call(db, desktop, beat=beat)
+    desktop.replies.append({"said": "elite please"})
+    call(db, desktop, beat="layout")
+    applied = json.dumps({"success": True, "applied": {"layout": "terminal-deck"}})
+    agent = SimpleNamespace(_session_db=db, session_id=SID, valid_tool_names={"setup_beat", "set_theme"})
+
+    result = json.loads(onboarding_record.observe_tool_result(agent, "set_theme", {"layout": "terminal-deck"}, applied))
+
+    assert result["success"] is True and result["onboarding"]["beat"] == "layout"
+    assert result["onboarding"]["next"] == "connectors" and "connectors card" in result["onboarding"]["reminder"]
+    plain_chat = SimpleNamespace(_session_db=db, session_id=SID, valid_tool_names={"set_theme"})
+    assert onboarding_record.observe_tool_result(plain_chat, "set_theme", {"layout": "terminal-deck"}, applied) == applied

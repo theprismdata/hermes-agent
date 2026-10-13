@@ -112,16 +112,25 @@ def active_session_id(db) -> str | None:
     return next(iter(open_session_ids(db)), None)
 
 
-def observe_tool_result(agent, name: str, args: Mapping[str, Any], result: Any) -> None:
+def observe_tool_result(agent, name: str, args: Mapping[str, Any], result: Any) -> Any:
     """Settle a beat from a general tool's result (``set_theme``, ``manage_connections`` display,
-    ``gui_tour``). Runs for every tool result; only an onboarding chat (one whose agent carries
-    ``setup_beat``) reads its record."""
+    ``gui_tour``) and return the result the model sees: unchanged, or with an ``onboarding`` entry
+    naming the settled beat, what comes next and the reminder. Runs for every tool result; only an
+    onboarding chat (one whose agent carries ``setup_beat``) reads its record."""
     if not applies_to(name) or "setup_beat" not in (getattr(agent, "valid_tool_names", None) or ()):
-        return
+        return result
     db, session_id = getattr(agent, "_session_db", None), getattr(agent, "session_id", "") or ""
     try:
-        parsed = json.loads(result) if isinstance(result, str) else result
-        if isinstance(parsed, dict) and load(db, session_id) is not None:
-            advance(db, session_id, Applied(name, dict(args or {}), parsed))
+        parsed = json.loads(result) if isinstance(result, str) else None
+        if not isinstance(parsed, dict) or load(db, session_id) is None:
+            return result
+        step = advance(db, session_id, Applied(name, dict(args or {}), parsed))
     except Exception:
         logger.warning("onboarding: %s result did not update the run record", name, exc_info=True)
+        return result
+    if not step.result:
+        return result
+    from agent.onboarding_text import reminder
+
+    note = reminder(step.reminder, step.record, Facts.from_stored(step.record["facts"]))
+    return json.dumps({**parsed, "onboarding": {**step.result, "reminder": note}}, ensure_ascii=False)

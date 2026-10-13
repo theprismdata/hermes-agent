@@ -209,6 +209,7 @@ _REMINDERS = {
     "after_layout": _after_layout,
     "after_connectors": lambda r, f: (f"Connected: {_names(r['picks']['connected'])}; newly connected: "
                                       f"{_names(r['picks']['newly_connected'])}. {_next(r)}"),
+    "after_tour": lambda r, f: f"The tour is running. {_next(r)}",
     "after_plugins": lambda r, f: f"Installed plugins: {_names(r['picks']['installed'])}. {_next(r)}",
     "after_tour": lambda r, f: _next(r),
     "after_build": lambda r, f: _next(r),
